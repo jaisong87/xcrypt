@@ -1,0 +1,53 @@
+Description
+----------------------------------------------------------------------
+A module called sys_xcrypt is implemented. After a Make the module needs to be
+insmoded and xcipher could be run. Without loading the module, the utility will
+report an error saying "Function not implemented". Code contains detailed comments
+and compiles with -Wall and -Werror 
+
+File Organization and High level details
+----------------------------------------------------------------------
+kernel.config - Contains the configuration used
+Makefile      - MakeFile for the project, makes xcipher and sys_xcrypt.ko and cleans up all files
+sys_xcrypt.ko - After doing a make, load this module for registering the system call implementation
+xcipher       - Executable(utility in user space) obtained after doing make
+
+xcrypt.c      - Source code of user-level program
+sys_xcrypt.c  - Source code of the module. All the code for the module is in this file
+xcryptUtils.h - Contains some structures and definitions used by both kernel and user space code.
+
+hw1/xcryptSysCall/ - Contains the system call(static code) and hw1-jaisgeorge/Makefile has this folder in "core-y"
+
+xcipher utility
+------------------------------------------------------------------------
+- Arguments are parsed using getopt.
+- flags -d, -e, -p, -h are supported and warning is thrown for -c(not supported) and other unknown options
+- All the arguments are validated before making system call and error is thrown if needed
+- The passphrase is salted using MD5 and passed to the system-call
+- Only basic validation is performed in user-space and all the implementation is in kernel space
+- If the system call fails perror is used for displaying error-codes and standard error codes are used
+
+sys_xcrypt.ko [ Implementation Details ]
+-------------------------------------------------------------------------
+- system call returns 0 on success and a negative number on failure
+- kernel code has much more checks compared to user level code
+- checks are mainly for malloc failures, read-write failures, encryption/decryption failures, 
+  errors while copying between buffers, validating pointers from userspace
+- temporary file is deleted in case of failure
+- Only aes is supported
+- cbc(aes) is used for encryption
+- The passphrase passed to the system call is encrypted using itself as the key with cbc(aes) and this 
+  is written to the preamble
+- Nothing else is written to the premable. It was possible to write file-size or a checksum to validate
+  after decryption.
+- The code works with 0 size files and also with files of the order of giga-bytes(above 2GB)
+- Code is tested with symbolic links and absolute, relative paths
+- Two functions xcrypt_aes_encrypt and xcrypt_aes_decrypt are used for encrypting/decrypting blocks of bytes
+- Initially first block is read/written for preamble
+- Later Blocks of size PAGE_SIZE(4096) are read/written and passed to xcrypt_aes_emcrypt/xcrypt_aes_decrypt
+  for encryption/decryption operation
+- After encrypting/decrypting the block, it is written to the output file and checks are performed after every 
+  read-write operation
+- 128-bit aes encryption is used and output file is padded to make its size a multiplt of 16. Suppose 12 is the
+  padding size, then padded bytes all have the value 12.
+- In case if the file given for decryption has bad padding, an error is returned ("Illegal byte sequence")
